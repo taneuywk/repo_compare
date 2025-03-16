@@ -1,0 +1,49 @@
+table.diff {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: Consolas, "Courier New", monospace;
+    background-color: #1e1e1e;
+    color: #cccccc;
+}
+
+.diff_header {
+    background-color: #2d2d2d;
+    color: #6c1c0b;
+    font-weight: bold;
+}
+
+.diff_next {
+    background-color: #333333;
+    color: #6c1c0b;
+}
+
+.diff_chg {
+    background-color: #5e4d17;
+    color: #6c1c0b;
+    font-weight: bold;
+}
+
+.diff_add {
+    background-color: #145228;
+    color: #6c1c0b;
+    font-weight: bold;
+}
+
+.diff_sub {
+    background-color: #8b2424;
+    color: #6c1c0b;
+    font-weight: bold;
+}
+
+table.diff,
+.diff_header,
+.diff_next,
+td,
+th {
+    border: 1px solid #555;
+}
+
+.diff_linenos {
+    background-color: #252526;
+    color: #aaaaaa;
+}
