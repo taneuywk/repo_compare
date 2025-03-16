@@ -11,7 +11,7 @@
 ## วิธีใช้งาน (Local Machine)
 
 1. **Clone โปรเจ็กต์ และติดตั้ง dependencies:**
-   git clone https://github.com/yourusername/git_compare_project.git
+   git clone https://github.com/Nattakitt-Tin/repo_compare
    cd git_compare_project
    pip install -r requirements.txt
 
