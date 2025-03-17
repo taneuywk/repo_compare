@@ -1,36 +1,34 @@
 import streamlit as st
 import os
+import re
 
 from git_compare import repo_manager, diff_utils
 
-
 # ฟังก์ชันโหลด CSS จากไฟล์
 def load_custom_css(css_path: str) -> str:
+    """โหลดไฟล์ CSS มาเป็น string"""
     if os.path.exists(css_path):
         with open(css_path, "r", encoding="utf-8") as f:
-            return f.read()
+            return f"<style>{f.read()}</style>"
     return ""
-
 
 # ----- ตั้งค่าหน้าตา Streamlit ----- #
 st.set_page_config(
-    page_title="Git Compare - Remove Old Folder on URL Change", layout="wide"
+    page_title="Git Compare - Regex File Mapping",
+    layout="wide"
 )
-st.title(
-    "🔍 Git Repository Compare - Branch or Tag, Dark Theme, Folder Remove on URL Change"
-)
+st.title("🔍 Git Repository Compare - Regex File Mapping, Dark Theme")
 
-# ========== 1) ตรวจจับ URL เปลี่ยน + ลบโฟลเดอร์เดิม + Clear cache ========== #
+# ========== (1) ตรวจจับ URL เปลี่ยน + ลบโฟลเดอร์เดิม + Clear cache ========== #
 if "old_repo_url" not in st.session_state:
     st.session_state.old_repo_url = ""
 
 repo_url = st.text_input("📂 Git Repository URL:", "https://github.com/ollama/ollama")
 repo_dir = "./git_repo"
 
+# ถ้า URL เปลี่ยน => ลบโฟลเดอร์ + clear cache
 if repo_url != st.session_state.old_repo_url and st.session_state.old_repo_url != "":
-    st.warning(
-        f"Repo URL changed from {st.session_state.old_repo_url} to {repo_url}. Removing old folder & clearing cache."
-    )
+    st.warning(f"Repo URL changed from {st.session_state.old_repo_url} to {repo_url}. Removing old folder & clearing cache.")
     repo_manager.remove_dir(repo_dir)
     st.cache_data.clear()
 
@@ -47,35 +45,23 @@ if st.button("Clone Repository"):
         repo_manager.clone_repo_if_not_exists(repo_url, repo_dir)
     st.success("Repository is ready!")
 
-# ===== ถ้ามีโฟลเดอร์แล้ว => ดึง Branch/Tag ===== #
+# ===== ถ้ามีโฟลเดอร์ => ดึง Branch/Tag ===== #
 if os.path.exists(repo_dir):
     branches, tags = repo_manager.get_all_branches_and_tags(repo_dir)
     if not branches and not tags:
         st.error("No Branches or Tags found in this repository.")
     else:
-        # ----- สร้าง Radio Button ฝั่งซ้าย ว่าจะเทียบ Branch / Tag ----- #
+        # ----- Compare Side 1 ----- #
         st.subheader("Compare Side 1")
-        compare_type_1 = st.radio(
-            "Compare type 1", ["Branch", "Tag"], index=0, horizontal=True
-        )
+        compare_type_1 = st.radio("Compare type 1", ["Branch", "Tag"], index=0, horizontal=True)
         ref_list_1 = branches if compare_type_1 == "Branch" else tags
-        side1 = (
-            st.selectbox("Select side 1", ref_list_1, key="side1_select")
-            if ref_list_1
-            else None
-        )
+        side1 = st.selectbox("Select side 1", ref_list_1, key="side1_select") if ref_list_1 else None
 
-        # ----- สร้าง Radio Button ฝั่งขวา ว่าจะเทียบ Branch / Tag ----- #
+        # ----- Compare Side 2 ----- #
         st.subheader("Compare Side 2")
-        compare_type_2 = st.radio(
-            "Compare type 2", ["Branch", "Tag"], index=0, horizontal=True
-        )
+        compare_type_2 = st.radio("Compare type 2", ["Branch", "Tag"], index=0, horizontal=True)
         ref_list_2 = branches if compare_type_2 == "Branch" else tags
-        side2 = (
-            st.selectbox("Select side 2", ref_list_2, key="side2_select")
-            if ref_list_2
-            else None
-        )
+        side2 = st.selectbox("Select side 2", ref_list_2, key="side2_select") if ref_list_2 else None
 
         if side1 and side2:
             files_side1 = repo_manager.list_files_in_ref(repo_dir, side1)
@@ -89,20 +75,16 @@ if os.path.exists(repo_dir):
             col_left, col_right = st.columns(2)
             with col_left:
                 st.write(f"Files only in `{side1}`:")
-                st.code(
-                    "\n".join(sorted(only_in_side1)) if only_in_side1 else "— None —"
-                )
+                st.code("\n".join(sorted(only_in_side1)) if only_in_side1 else "— None —")
             with col_right:
                 st.write(f"Files only in `{side2}`:")
-                st.code(
-                    "\n".join(sorted(only_in_side2)) if only_in_side2 else "— None —"
-                )
+                st.code("\n".join(sorted(only_in_side2)) if only_in_side2 else "— None —")
 
-            # ----- Custom File Mapping ----- #
+            # ----- Custom File Mapping (Manual) ----- #
             if "file_mapping" not in st.session_state:
                 st.session_state.file_mapping = {}
 
-            st.subheader("🔗 Custom File Mapping (ชื่อไฟล์ไม่ตรงกัน)")
+            st.subheader("🔗 Custom File Mapping (Manual)")
             with st.form("custom_mapping_form", clear_on_submit=True):
                 f_in_1 = st.text_input(f"File name in {side1}")
                 f_in_2 = st.text_input(f"File name in {side2}")
@@ -113,6 +95,21 @@ if os.path.exists(repo_dir):
                         st.success(f"Added mapping: {f_in_1} => {f_in_2}")
                     else:
                         st.warning("Please fill both file names before adding mapping.")
+
+            # ----- Custom File Mapping (by Regex) ----- #
+            st.subheader("🤖 Regex-based File Mapping")
+            with st.form("regex_mapping_form"):
+                pattern = st.text_input("Regex Pattern (Side 1)", "")
+                replacement = st.text_input("Regex Replacement (Side 1)", "")
+                apply_regex = st.form_submit_button("Apply Regex to Side 1")
+                if apply_regex:
+                    if pattern:
+                        # ใช้ฟังก์ชัน regex_file_mapping จาก repo_manager
+                        auto_mapping = repo_manager.regex_file_mapping(files_side1, pattern, replacement)
+                        st.session_state.file_mapping.update(auto_mapping)
+                        st.success(f"Applied Regex => {len(auto_mapping)} files mapped.")
+                    else:
+                        st.warning("Please provide a valid regex pattern.")
 
             if st.session_state.file_mapping:
                 st.write("Current Mappings:")
@@ -134,9 +131,11 @@ if os.path.exists(repo_dir):
                 if content1 and content2 and (content1 != content2):
                     changed = diff_utils.quick_diff_lines(content1, content2)
                     if changed > 0:
-                        summary_data.append(
-                            {"file1": f1, "file2": f2, "changed_lines": changed}
-                        )
+                        summary_data.append({
+                            "file1": f1,
+                            "file2": f2,
+                            "changed_lines": changed
+                        })
 
             if summary_data:
                 st.subheader("📝 Differences Summary")
@@ -146,15 +145,10 @@ if os.path.exists(repo_dir):
                     f"{item['file1']} => {item['file2']} (Changed {item['changed_lines']} lines)"
                     for item in summary_data
                 ]
-                selected_pair_str = st.selectbox(
-                    "📄 Select File Pair to Compare:", pair_display_list
-                )
+                selected_pair_str = st.selectbox("📄 Select File Pair to Compare:", pair_display_list)
 
                 reverse_map = {
-                    f"{item['file1']} => {item['file2']} (Changed {item['changed_lines']} lines)": (
-                        item["file1"],
-                        item["file2"],
-                    )
+                    f"{item['file1']} => {item['file2']} (Changed {item['changed_lines']} lines)": (item['file1'], item['file2'])
                     for item in summary_data
                 }
 
@@ -167,16 +161,9 @@ if os.path.exists(repo_dir):
                     c1, c2, f"{side1}:{file1}", f"{side2}:{file2}"
                 )
 
-                # โหลด custom CSS จากไฟล์
-                custom_css = load_custom_css("assets/custom.css")
+                # โหลด Custom CSS
                 css_content = load_custom_css("assets/custom.css")
-                css_tag = f"<style>{css_content}</style>"
-
-                html_content = css_tag + html_diff
-                st.components.v1.html(html_content, height=800, scrolling=True)
-                # st.components.v1.html(
-                #     custom_css + html_diff, height=800, scrolling=True
-                # )
+                st.components.v1.html(css_content + html_diff, height=800, scrolling=True)
             else:
                 st.success("✅ No differences found among common or mapped files.")
         else:
