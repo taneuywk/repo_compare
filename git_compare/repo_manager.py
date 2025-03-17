@@ -20,7 +20,7 @@ def clone_repo_if_not_exists(repo_url: str, repo_dir: str):
 def get_all_branches_and_tags(repo_dir: str):
     """ดึงรายการ Branch/Tag จาก Local Repo"""
     repo = git.Repo(repo_dir)
-    branches = [str(b) for b in repo.branches]
+    branches = [b.name for b in repo.remotes.origin.refs]
     tags = [str(t) for t in repo.tags]
     return branches, tags
 
